@@ -548,7 +548,7 @@ void EnableDodgeBall()
 	if (g_iDefaultBluSpawner == -1) SetFailState("No spawner class definition for the Blu spawners exists in the config file.");
 	
 	// Hook events and info_target outputs.
-	HookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
+	HookEvent("teamplay_round_active", OnRoundStart, EventHookMode_PostNoCopy);
 	// teamplay_setup_finished will not fire on maps that lack team_round_timer
 	HookEvent("arena_round_start", OnSetupFinished, EventHookMode_PostNoCopy);
 	HookEvent("teamplay_round_win", OnRoundEnd, EventHookMode_PostNoCopy);
@@ -627,7 +627,7 @@ void DisableDodgeBall()
 	g_bMusic[Music_Gameplay]   = false;
 	
 	// Unhook events and info_target outputs
-	UnhookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
+	UnhookEvent("teamplay_round_active", OnRoundStart, EventHookMode_PostNoCopy);
 	UnhookEvent("arena_round_start", OnSetupFinished, EventHookMode_PostNoCopy);
 	UnhookEvent("teamplay_round_win", OnRoundEnd, EventHookMode_PostNoCopy);
 	UnhookEvent("player_spawn", OnPlayerSpawn, EventHookMode_Post);
@@ -687,6 +687,9 @@ public void OnRoundStart(Event hEvent, char[] strEventName, bool bDontBroadcast)
 		bStealArray[iClient].stoleRocket = false;
 		bStealArray[iClient].rocketsStolen = 0;
 	}
+
+	Event hArenaRoundStart = CreateEvent("arena_round_start", true);
+	hArenaRoundStart.Fire();
 }
 
 /* OnSetupFinished()
@@ -797,6 +800,15 @@ public void OnPlayerDeath(Event hEvent, char[] strEventName, bool bDontBroadcast
 	float fSpeed = g_fRocketSpeed[iIndex];
 	float fMphSpeed = g_fRocketMphSpeed[iIndex];
 	int iDeflections = g_iRocketDeflections[iIndex];
+
+	if (iVictim == iTarget)
+	{
+		CPrintToChatAll("\x05%N\01 died to their rocket travelling \x05%.0f\x01 mph with \x05%i\x01 deflections!", g_iLastDeadClient, fMphSpeed, iDeflections);
+	}
+	else
+	{
+		CPrintToChatAll("\x05%N\x01 died to \x05%.15N's\x01 rocket travelling \x05%.0f\x01 mph with \x05%i\x01 deflections!", g_iLastDeadClient, iTarget, fMphSpeed, iDeflections);
+	}
 	
 	if ((g_iRocketFlags[iIndex] & RocketFlag_OnExplodeCmd) && !(g_iRocketFlags[iIndex] & RocketFlag_Exploded))
 	{
