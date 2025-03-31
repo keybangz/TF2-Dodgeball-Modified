@@ -32,9 +32,6 @@ bool g_bLoaded = false;
 
 public void OnPluginStart()
 {
-    if (!TFDB_IsDodgeballEnabled())
-        return;
-
 	RegAdminCmd("sm_versus", Command_VersusToggle, ADMFLAG_GENERIC, "Toggles versus mode.");
 
 	TFDB_OnRocketsConfigExecuted();
@@ -85,11 +82,14 @@ public void EnableVersus()
 	if(g_bVersusMode)
 		return;
 
+	if (!TFDB_IsDodgeballEnabled())
+        return;
+
     g_bVersusMode = true;
 
     for (int i = 1; i <= MaxClients; i++)
     {
-        if (IsValidClient(i) && IsPlayerAlive(i))
+        if (IsValidClient(i))
         {
             GetClientAbsOrigin(i, g_fStartPosition[i]);
             SetEntProp(i, Prop_Data, "m_takedamage", 1, 1);
@@ -130,6 +130,9 @@ public void DisableVersus()
 	if(!g_bVersusMode)
 		return;
 
+	if (!TFDB_IsDodgeballEnabled())
+        return;
+
     g_bVersusMode = false;
 
     for (int i = 1; i <= MaxClients; i++)
@@ -148,9 +151,8 @@ public void DisableVersus()
 	g_iScore[Player2] = 0;
 
 	int triggerEnt = FindEntityByClassname(-1, "trigger_hurt");
-	if(IsValidEntity(triggerEnt)) {
+	if(IsValidEntity(triggerEnt))
 		SDKUnhook(triggerEnt, SDKHook_Touch, OnTriggerHurt);
-	}
 
 	CPrintToChatAll("\x05Versus\x01 mode disabled.");
 
@@ -191,6 +193,7 @@ public Action Timer_VersusRound(Handle timer) {
 
 public void ForceEndRound() {
 	int iEnt = -1;
+	int WinningTeam = 0;
 	iEnt = FindEntityByClassname(iEnt, "game_round_win");
 	
 	if (iEnt < 1)
@@ -199,8 +202,15 @@ public void ForceEndRound() {
 		if (IsValidEntity(iEnt))
 			DispatchSpawn(iEnt);
 	}
+
+	if(g_iScore[Player1] >> g_iScore[Player2])
+		WinningTeam = 2;
+	else if(g_iScore[Player2] >> g_iScore[Player1])
+		WinningTeam = 3;
+	else if(g_iScore[Player1] == g_iScore[Player2])
+		WinningTeam = 0;
 		
-	SetVariantInt(0);
+	SetVariantInt(WinningTeam);
 	AcceptEntityInput(iEnt, "SetTeam");
 	AcceptEntityInput(iEnt, "RoundWin");
 }
@@ -278,9 +288,9 @@ public Action OnRocketTouch(int entity, int other)
         CPrintToChatAll("\x05%N\x01 was hit by a rocket travelling \x05%.0f\x01 mph with \x05%i\x01 deflections!", other, TFDB_GetRocketMphSpeed(g_iLastRocket), TFDB_GetRocketDeflections(g_iLastRocket));
 
 		if(TF2_GetClientTeam(other) == TFTeam_Blue && IsValidClient(Player2))
-			g_iScore[Player2]++;
-		else if(TF2_GetClientTeam(other) == TFTeam_Red && IsValidClient(Player1))
 			g_iScore[Player1]++;
+		else if(TF2_GetClientTeam(other) == TFTeam_Red && IsValidClient(Player1))
+			g_iScore[Player2]++;
 
 		for(int i = 1; i <= MaxClients; i++) {
 			if(IsValidClient(i) && !IsFakeClient(i)) {
