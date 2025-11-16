@@ -23,6 +23,7 @@ int g_iRemainingTime;
 int    g_iLastRocket;
 int g_iScore[MAXPLAYERS+1]		 = { 0, ... };
 bool   g_bVersusMode 			 = false;
+bool g_bRoundStarted 			 = false;
 Handle g_hRoundHUD 		 		 = INVALID_HANDLE;
 Handle g_hRoundTimer     		 = INVALID_HANDLE;
 Handle g_hPlayer1HUD 		     = INVALID_HANDLE;
@@ -30,8 +31,7 @@ Handle g_hPlayer2HUD 			 = INVALID_HANDLE;
 int Player1,Player2 			 = -1;
 bool g_bLoaded = false;
 
-public void OnPluginStart()
-{
+public void OnPluginStart() {
 	RegAdminCmd("sm_versus", Command_VersusToggle, ADMFLAG_GENERIC, "Toggles versus mode.");
 
 	TFDB_OnRocketsConfigExecuted();
@@ -41,9 +41,8 @@ public void OnPluginStart()
 }
 
 
-public void TFDB_OnRocketsConfigExecuted()
-{
-	 // HookEvent("player_hurt", OnPlayerHurt);
+public void TFDB_OnRocketsConfigExecuted() {
+	// HookEvent("player_hurt", OnPlayerHurt);
     HookEvent("teamplay_round_active", OnRoundStart);
     HookEvent("arena_round_start", OnRoundStart);
     HookEvent("teamplay_round_win", OnRoundEnd, EventHookMode_Post);
@@ -77,8 +76,7 @@ public void OnMapEnd() {
 	g_bLoaded = false;
 }
 
-public void EnableVersus()
-{
+public void EnableVersus() {
 	if(g_bVersusMode)
 		return;
 
@@ -94,10 +92,13 @@ public void EnableVersus()
             GetClientAbsOrigin(i, g_fStartPosition[i]);
             SetEntProp(i, Prop_Data, "m_takedamage", 1, 1);
 
-			if(GetClientTeam(i) == 2)
-				Player1 = i;
-			else if(GetClientTeam(i) == 3)
-				Player2 = i;
+			if(i > 0 && i <= MaxClients) {
+				if(GetClientTeam(i) == 2)
+					Player1 = i;
+
+				if(GetClientTeam(i) == 3)
+					Player2 = i;
+			}
 
 			if(!IsFakeClient(i)) {
 				SetHudTextParams(0.10, 0.125, float(g_iRoundTime), 255, 255, 255, 255);
@@ -125,8 +126,7 @@ public void EnableVersus()
 	CPrintToChatAll("\x05Versus\x01 mode enabled.");
 }
 
-public void DisableVersus()
-{
+public void DisableVersus() {
 	if(!g_bVersusMode)
 		return;
 
@@ -149,6 +149,9 @@ public void DisableVersus()
 	// Covers players disconnecting.
 	g_iScore[Player1] = 0;
 	g_iScore[Player2] = 0;
+
+	Player1 = 0;
+	Player2 = 0;
 
 	int triggerEnt = FindEntityByClassname(-1, "trigger_hurt");
 	if(IsValidEntity(triggerEnt))
@@ -215,38 +218,32 @@ public void ForceEndRound() {
 	AcceptEntityInput(iEnt, "RoundWin");
 }
 
-public void OnClientPutInServer(int client) {
-	int realClients = GetRealClientCount();
+// public void OnClientPutInServer(int client) {
+// 	int realClients = GetRealClientCount();
 
-    if (realClients >> 2)
-        DisableVersus();
-}
+//     if (realClients >= 3)
+//         DisableVersus();
+// }
 
-public void OnClientDisconnect(int client) {
-	int realClients = GetRealClientCount();
-    // int fakeClients = GetFakeClientCount();
+// public void OnClientDisconnect(int client) {
+// 	int realClients = GetRealClientCount();
 
-    if (realClients <= 2)
-        EnableVersus();
+//     if (realClients <= 2)
+//         EnableVersus();
 
-	if (realClients == 0)
-		DisableVersus();
-}
+// 	if (realClients == 0)
+// 		DisableVersus();
+// }
 
-public Action OnRoundStart(Event event, char[] name, bool dontBroadcast)
-{
-    int realClients = GetRealClientCount();
-    // int fakeClients = GetFakeClientCount();
-
-    // PVB Bot Mode or players 1v1ing
-    if (realClients <= 2)
-        EnableVersus();
+public Action OnRoundStart(Event event, char[] name, bool dontBroadcast) {
+    g_bRoundStarted = true;
 
     return Plugin_Continue;
 }
 
-public Action OnRoundEnd(Event event, char[] name, bool dontBroadcast)
-{
+public Action OnRoundEnd(Event event, char[] name, bool dontBroadcast) {
+	g_bRoundStarted = false;
+
     DisableVersus();
 
 	return Plugin_Continue;
@@ -261,26 +258,24 @@ public void TFDB_OnRocketCreated(int iIndex, int iEntity) {
 	SDKHook(iEntity, SDKHook_Touch, OnRocketTouch);
 }
 
-// public void OnEntityCreated(int entity, const char[] classname)
-// {
-//     if (!StrEqual(classname, "tf_projectile_rocket", false))
-//         return;
+public void OnGameFrame() {
+	int onlineClients = GetRealClientCount(true);
 
-// 	if(!IsValidEntity(entity))
-// 		return;
-	
-// 	CreateTimer(0.2, Timer_FixTouchHud, entity); 
-// }
+	if(g_bRoundStarted == false)
+		return;
 
-// public Action Timer_FixTouchHud(Handle timer, any data) {
-// 	if(g_bVersusMode)
-// 		SDKHook(data, SDKHook_Touch, OnRocketTouch);
+	// If amount of real clients on server in-game are higher than 2, disable versus.
+	if(onlineClients > 2) {
+		DisableVersus();
+	}
 
-// 	return Plugin_Stop;
-// }
+	// If amount of real clients on server in-game 2 or less, enable versus mode.
+	if(onlineClients <= 2) {
+		EnableVersus();
+	}
+}
 
-public Action OnRocketTouch(int entity, int other)
-{
+public Action OnRocketTouch(int entity, int other) {
 	if(!g_bVersusMode)
 		return Plugin_Continue;
 	
@@ -305,23 +300,20 @@ public Action OnRocketTouch(int entity, int other)
     return Plugin_Continue;
 }
 
-public Action TFDB_OnRocketDeflectPre(int iIndex)
-{
+public Action TFDB_OnRocketDeflectPre(int iIndex) {
 	g_iLastRocket = iIndex;
 	
 	return Plugin_Continue;
 }
 
-public Action OnTriggerHurt(int entity, int player)
-{
+public Action OnTriggerHurt(int entity, int player) {
     if (IsValidClient(player) && IsPlayerAlive(player))
         TeleportEntity(player, g_fStartPosition[player], NULL_VECTOR, NULL_VECTOR);
 
     return Plugin_Continue;
 }
 
-int FindLastRocket()
-{
+int FindLastRocket() {
 	float fDeflectionTime;
 	float fSpawnTime;
 	int   iDeflectionIndex;
@@ -348,13 +340,11 @@ int FindLastRocket()
 }
 
 // Client Functions
-bool IsValidClient(int client)
-{
+bool IsValidClient(int client) {
     return (client > 0 && client <= MaxClients && IsClientInGame(client));
 }
 
-int GetRealClientCount(bool inGameOnly = true)
-{
+int GetRealClientCount(bool inGameOnly = true) {
     int clients = 0;
     for (int i = 1; i <= MaxClients; i++)
     {
@@ -366,8 +356,7 @@ int GetRealClientCount(bool inGameOnly = true)
     return clients;
 }
 
-stock int GetFakeClientCount(bool inGameOnly = true)
-{
+stock int GetFakeClientCount(bool inGameOnly = true) {
     int clients = 0;
     for (int i = 1; i <= MaxClients; i++)
     {
